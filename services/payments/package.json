@@ -1,0 +1,25 @@
+{
+  "name": "payments",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/wompi.ts",
+    "build": "tsc",
+    "start": "node dist/wompi.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "resend": "^4.0.0",
+    "@repo/db": "workspace:*",
+    "@repo/types": "workspace:*",
+    "bullmq": "^5.28.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "@repo/config": "workspace:*"
+  }
+}

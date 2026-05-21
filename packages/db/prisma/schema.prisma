@@ -1,0 +1,692 @@
+// ─── Prisma Schema — De Paseo en Fincas ───────────────────────────────────────
+// 18 modelos completos según Protocolo Maestro v4
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DATABASE_URL_UNPOOLED")
+  extensions = [pgvector(map: "vector", schema: "extensions")]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum UserRole {
+  CLIENTE
+  ASESOR
+  PROPIETARIO
+  ADMIN
+}
+
+enum Channel {
+  WHATSAPP
+  INSTAGRAM
+  WEB
+  EMAIL
+}
+
+enum FincaStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_REVIEW
+  SUSPENDED
+}
+
+enum CancellationPolicy {
+  FLEXIBLE
+  MODERATE
+  STRICT
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BLOCKED
+  RESERVED
+  MAINTENANCE
+}
+
+enum AvailabilitySource {
+  MANUAL
+  RESERVATION
+  OWNER_BLOCK
+  MAINTENANCE
+}
+
+enum ReservationStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  PSE
+  CARD
+  NEQUI
+  TRANSFER
+  CASH
+  ADDI
+}
+
+enum PaymentProvider {
+  WOMPI
+  ADDI
+  MANUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum BotSessionState {
+  IDLE
+  SEARCHING
+  QUOTING
+  BOOKING
+  PAYING
+  ESCALATED
+  CLOSED
+}
+
+enum BotMessageRole {
+  USER
+  BOT
+  SYSTEM
+  TOOL
+}
+
+enum KnowledgeChunkType {
+  FINCA
+  FAQ
+  POLICY
+  DESTINATION
+  REVIEW
+  AMENITY
+}
+
+enum LeadSource {
+  WHATSAPP
+  INSTAGRAM
+  WEB
+  REFERRAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  NEGOTIATING
+  CLOSED_WON
+  CLOSED_LOST
+  COLD
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  REWARDED
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 1 — User
+// ═══════════════════════════════════════════════════════════════════════════════
+model User {
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  emailVerified        DateTime?
+  name                 String?
+  phone                String?
+  image                String?
+  role                 UserRole  @default(CLIENTE)
+  passwordHash         String?
+  googleCalendarToken  String?   // AES-256 encrypted refresh_token
+  preferredChannel     Channel   @default(WHATSAPP)
+  timezone             String    @default("America/Bogota")
+  locale               String    @default("es-CO")
+  isOnline             Boolean   @default(false)
+  twoFactorEnabled     Boolean   @default(false)
+  twoFactorSecret      String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  profile        UserProfile?
+  accounts       Account[]
+  sessions       Session[]
+  reservations   Reservation[]   @relation("ClientReservations")
+  advisedReservations Reservation[] @relation("AdvisorReservations")
+  leads          Lead[]          @relation("AdvisorLeads")
+  ownedFincas    Finca[]
+  notifications  Notification[]
+  reviews        Review[]
+  referralsGiven Referral[]      @relation("Referrer")
+  referralReceived Referral?     @relation("Referred")
+  auditLogs      AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isOnline])
+  @@map("users")
+}
+
+// ─── NextAuth.js required models ──────────────────────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 2 — UserProfile
+// ═══════════════════════════════════════════════════════════════════════════════
+model UserProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  municipalityPreferences String[] @default([])
+  budgetMin               Int?
+  budgetMax               Int?
+  typicalGroupSize        Int?
+  favoriteAmenities       String[] @default([])
+  birthdayDate            DateTime?
+  lastActiveAt            DateTime @default(now())
+  npsScore                Int?
+  totalReservations       Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 3 — Finca
+// ═══════════════════════════════════════════════════════════════════════════════
+model Finca {
+  id                 String             @id @default(cuid())
+  slug               String             @unique
+  name               String
+  description        String             @db.Text
+  shortDescription   String
+  municipality       String
+  department         String
+  lat                Float
+  lng                Float
+  capacity           Int
+  bedrooms           Int
+  bathrooms          Int
+  pricePerNight      Int                // COP
+  weekendPrice       Int?               // Override precio fin de semana
+  holidayPrice       Int?               // Override festivos
+  minNights          Int                @default(1)
+  maxNights          Int                @default(30)
+  checkInTime        String             @default("15:00")
+  checkOutTime       String             @default("12:00")
+  status             FincaStatus        @default(PENDING_REVIEW)
+  amenities          String[]           @default([])
+  rules              String?            @db.Text
+  cancellationPolicy CancellationPolicy @default(MODERATE)
+  ownerId            String
+  googleCalendarId   String?
+  featured           Boolean            @default(false)
+  featuredUntil      DateTime?
+  locationPrivacy    Boolean            @default(false) // 100m offset en mapa
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  owner           User                @relation(fields: [ownerId], references: [id])
+  images          FincaImage[]
+  availability    Availability[]
+  reservations    Reservation[]
+  reviews         Review[]
+  knowledgeChunks KnowledgeChunk[]
+
+  @@index([municipality])
+  @@index([department])
+  @@index([status])
+  @@index([featured])
+  @@index([pricePerNight])
+  @@map("fincas")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 4 — FincaImage
+// ═══════════════════════════════════════════════════════════════════════════════
+model FincaImage {
+  id        String @id @default(cuid())
+  fincaId   String
+  url       String
+  publicId  String  // Cloudinary publicId
+  alt       String  @default("")
+  width     Int
+  height    Int
+  order     Int     @default(0)
+  isPrimary Boolean @default(false)
+  blurhash  String?
+
+  finca Finca @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+
+  @@unique([fincaId, order])
+  @@index([fincaId])
+  @@map("finca_images")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 5 — Availability
+// ═══════════════════════════════════════════════════════════════════════════════
+model Availability {
+  id            String             @id @default(cuid())
+  fincaId       String
+  date          DateTime           @db.Date
+  status        AvailabilityStatus @default(AVAILABLE)
+  priceOverride Int?
+  note          String?
+  source        AvailabilitySource @default(MANUAL)
+
+  finca Finca @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+
+  @@unique([fincaId, date])
+  @@index([fincaId, date])
+  @@map("availability")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 6 — Reservation
+// ═══════════════════════════════════════════════════════════════════════════════
+model Reservation {
+  id                 String            @id @default(cuid())
+  fincaId            String
+  clientId           String
+  advisorId          String?
+  checkIn            DateTime          @db.Date
+  checkOut           DateTime          @db.Date
+  nights             Int
+  adults             Int
+  children           Int               @default(0)
+  basePrice          Int               // COP
+  platformFeePercent Float             @default(0.08)
+  platformFee        Int
+  ownerPayout        Int
+  totalPrice         Int
+  currency           String            @default("COP")
+  status             ReservationStatus @default(PENDING_PAYMENT)
+  cancellationReason String?
+  cancellationPolicy CancellationPolicy
+  googleEventId      String?
+  checkInCode        String?           @unique
+  specialRequests    String?           @db.Text
+  internalNotes      String?           @db.Text
+  couponId           String?
+  discountAmount     Int               @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  finca    Finca    @relation(fields: [fincaId], references: [id])
+  client   User     @relation("ClientReservations", fields: [clientId], references: [id])
+  advisor  User?    @relation("AdvisorReservations", fields: [advisorId], references: [id])
+  payments Payment[]
+  coupon   Coupon?  @relation(fields: [couponId], references: [id])
+
+  @@index([clientId])
+  @@index([fincaId])
+  @@index([status])
+  @@index([checkIn, checkOut])
+  @@map("reservations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 7 — Payment
+// ═══════════════════════════════════════════════════════════════════════════════
+model Payment {
+  id            String          @id @default(cuid())
+  reservationId String
+  amount        Int
+  currency      String          @default("COP")
+  method        PaymentMethod
+  provider      PaymentProvider @default(WOMPI)
+  providerId    String?         // Transaction ID externo
+  status        PaymentStatus   @default(PENDING)
+  paidAt        DateTime?
+  receipt       String?
+  refundAmount  Int?
+  refundAt      DateTime?
+  refundReason  String?
+  metadata      Json?           // Datos adicionales del proveedor
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId])
+  @@index([providerId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 8 — BotSession
+// ═══════════════════════════════════════════════════════════════════════════════
+model BotSession {
+  id                String          @id @default(cuid())
+  userId            String?
+  channel           Channel
+  externalId        String          // phone E.164 / ig_user_id / socket_id
+  state             BotSessionState @default(IDLE)
+  messages          Json            @default("[]")
+  extractedEntities Json            @default("{}")
+  currentFincaId    String?
+  quoteData         Json?
+  advisorId         String?
+  ttlExpiresAt      DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  botMessages BotMessage[]
+  lead        Lead?
+
+  @@unique([channel, externalId])
+  @@index([externalId])
+  @@index([state])
+  @@index([ttlExpiresAt])
+  @@map("bot_sessions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 9 — BotMessage
+// ═══════════════════════════════════════════════════════════════════════════════
+model BotMessage {
+  id         String         @id @default(cuid())
+  sessionId  String
+  role       BotMessageRole
+  content    String         @db.Text
+  toolName   String?
+  toolInput  Json?
+  toolOutput Json?
+  tokensUsed Int?
+  model      String?
+  latencyMs  Int?
+  createdAt  DateTime       @default(now())
+
+  session BotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("bot_messages")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 10 — Lead
+// ═══════════════════════════════════════════════════════════════════════════════
+model Lead {
+  id              String     @id @default(cuid())
+  sessionId       String?    @unique
+  advisorId       String?
+  clientName      String
+  clientPhone     String?
+  clientEmail     String?
+  source          LeadSource
+  status          LeadStatus @default(NEW)
+  municipality    String?
+  checkIn         DateTime?  @db.Date
+  checkOut        DateTime?  @db.Date
+  adults          Int?
+  budgetMin       Int?
+  budgetMax       Int?
+  notes           String?    @db.Text
+  assignedAt      DateTime?
+  firstResponseAt DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  advisor User?       @relation("AdvisorLeads", fields: [advisorId], references: [id])
+  session BotSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([advisorId, status])
+  @@index([source])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 11 — KnowledgeChunk (pgvector RAG)
+// ═══════════════════════════════════════════════════════════════════════════════
+model KnowledgeChunk {
+  id        String             @id @default(cuid())
+  type      KnowledgeChunkType
+  sourceId  String?
+  content   String             @db.Text
+  embedding Unsupported("vector(1536)")?
+  metadata  Json               @default("{}")
+  updatedAt DateTime           @updatedAt
+
+  finca Finca? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([sourceId])
+  @@map("knowledge_chunks")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 12 — Review
+// ═══════════════════════════════════════════════════════════════════════════════
+model Review {
+  id             String          @id @default(cuid())
+  fincaId        String
+  clientId       String
+  reservationId  String          @unique
+  rating         Int             // 1–5
+  cleanliness    Int?
+  location       Int?
+  valueForMoney  Int?
+  comment        String?         @db.Text
+  publishedAt    DateTime?
+  sentiment      ReviewSentiment?
+  response       String?         @db.Text
+  respondedAt    DateTime?
+  createdAt      DateTime        @default(now())
+
+  finca  Finca @relation(fields: [fincaId], references: [id])
+  client User  @relation(fields: [clientId], references: [id])
+
+  @@index([fincaId, publishedAt])
+  @@map("reviews")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 13 — Notification
+// ═══════════════════════════════════════════════════════════════════════════════
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String    @db.Text
+  channel     Channel   @default(EMAIL)
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  read        Boolean   @default(false)
+  metadata    Json      @default("{}")
+  jobId       String?   // BullMQ job ID — para poder cancelar
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([scheduledAt])
+  @@index([sentAt])
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 14 — BotConfig
+// ═══════════════════════════════════════════════════════════════════════════════
+model BotConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  category    String   @default("general")
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@map("bot_config")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 15 — Municipality
+// ═══════════════════════════════════════════════════════════════════════════════
+model Municipality {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  name               String
+  department         String
+  description        String?  @db.Text
+  heroImage          String?
+  lat                Float
+  lng                Float
+  avgTempCelsius     Float?
+  distanceKmBogota   Int?
+  distanceKmMedellin Int?
+  active             Boolean  @default(true)
+  seoTitle           String?
+  seoDescription     String?
+
+  @@index([department])
+  @@index([active])
+  @@map("municipalities")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 16 — Coupon
+// ═══════════════════════════════════════════════════════════════════════════════
+model Coupon {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  discountType    DiscountType
+  discountValue   Int          // Porcentaje (0-100) o monto fijo COP
+  minOrderAmount  Int?
+  maxUses         Int?
+  usedCount       Int          @default(0)
+  expiresAt       DateTime?
+  active          Boolean      @default(true)
+  createdBy       String?
+  createdAt       DateTime     @default(now())
+
+  reservations Reservation[]
+
+  @@index([code])
+  @@index([active])
+  @@map("coupons")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 17 — Referral
+// ═══════════════════════════════════════════════════════════════════════════════
+model Referral {
+  id          String         @id @default(cuid())
+  referrerId  String
+  referredId  String?        @unique
+  code        String         @unique
+  status      ReferralStatus @default(PENDING)
+  rewardType  String?
+  rewardValue Int?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  referrer User  @relation("Referrer", fields: [referrerId], references: [id])
+  referred User? @relation("Referred", fields: [referredId], references: [id])
+
+  @@index([referrerId])
+  @@map("referrals")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO 18 — AuditLog
+// ═══════════════════════════════════════════════════════════════════════════════
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELO — AssignmentWeights (single row)
+// ═══════════════════════════════════════════════════════════════════════════════
+model AssignmentWeights {
+  id                          String   @id @default("singleton")
+  municipalityMatchPts        Float    @default(10.0)
+  penaltyPerActiveLead        Float    @default(2.0)
+  scheduleAvailablePts        Float    @default(5.0)
+  conversionRateMultiplier    Float    @default(20.0)
+  responseTimePenaltyPerHour  Float    @default(1.0)
+  updatedAt                   DateTime @updatedAt
+
+  @@map("assignment_weights")
+}

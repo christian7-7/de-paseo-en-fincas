@@ -1,0 +1,24 @@
+{
+  "name": "scheduler",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/reminders.ts",
+    "build": "tsc",
+    "start": "node dist/reminders.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bullmq": "^5.28.0",
+    "ioredis": "^5.4.1",
+    "@repo/db": "workspace:*",
+    "@repo/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "@repo/config": "workspace:*"
+  }
+}
