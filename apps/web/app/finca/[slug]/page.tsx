@@ -18,6 +18,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { Button, Badge, Card, CardContent } from "@repo/ui";
+import { BookingCard } from "./BookingCard";
 
 interface Props {
   params: { slug: string };
@@ -281,70 +282,19 @@ export default async function FincaDetailPage({ params }: Props) {
 
           {/* Sticky booking bar */}
           <div className="lg:col-span-1">
-            <div className="sticky top-20">
-              <Card className="shadow-lg">
-                <CardContent className="pt-6 space-y-4">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-[#E8832A]">{formattedPrice}</span>
-                    <span className="text-sm text-muted-foreground">/ noche</span>
-                  </div>
-                  {finca.weekendPrice && finca.weekendPrice !== finca.pricePerNight && (
-                    <p className="text-xs text-muted-foreground">
-                      {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(finca.weekendPrice)} fin de semana
-                    </p>
-                  )}
-
-                  <div className="border border-border rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-2 divide-x divide-border">
-                      <div className="p-3">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Check-in</div>
-                        <input type="date" className="text-sm bg-transparent outline-none w-full mt-1" />
-                      </div>
-                      <div className="p-3">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Check-out</div>
-                        <input type="date" className="text-sm bg-transparent outline-none w-full mt-1" />
-                      </div>
-                    </div>
-                    <div className="border-t border-border p-3">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Personas</div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Adultos</span>
-                        <div className="flex items-center gap-3">
-                          <button className="h-7 w-7 rounded-full border flex items-center justify-center text-sm hover:bg-muted">−</button>
-                          <span className="text-sm font-semibold">2</span>
-                          <button className="h-7 w-7 rounded-full border flex items-center justify-center text-sm hover:bg-muted">+</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button className="w-full" size="lg">
-                    Reservar ahora
-                  </Button>
-
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
-                    <Shield className="h-3.5 w-3.5" />
-                    Pago 100% seguro con Wompi
-                  </div>
-
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    <div className="flex justify-between">
-                      <span>Check-in</span>
-                      <span className="font-medium">{finca.checkInTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Check-out</span>
-                      <span className="font-medium">{finca.checkOutTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Mín. noches</span>
-                      <span className="font-medium">{finca.minNights}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="mt-4 text-center">
+            <div className="sticky top-20 space-y-4">
+              <BookingCard
+                finca={{
+                  id: finca.id,
+                  pricePerNight: finca.pricePerNight,
+                  weekendPrice: finca.weekendPrice,
+                  capacity: finca.capacity,
+                  minNights: finca.minNights,
+                  slug: finca.slug,
+                  name: finca.name,
+                }}
+              />
+              <div className="text-center">
                 <Link
                   href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "573001234567"}?text=${encodeURIComponent(`Hola! Me interesa la finca ${finca.name}`)}`}
                   target="_blank"
