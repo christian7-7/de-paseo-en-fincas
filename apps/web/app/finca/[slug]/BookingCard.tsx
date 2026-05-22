@@ -80,6 +80,43 @@ export function BookingCard({ finca }: BookingCardProps) {
     },
   });
 
+  // Fetch blocked dates for the selected month range
+  const checkInDate = checkIn ? new Date(checkIn) : null;
+  const checkOutDate = checkOut ? new Date(checkOut) : null;
+
+  const { data: availabilityCheckIn } = trpc.fincas.availability.useQuery(
+    {
+      fincaId: finca.id,
+      month: checkInDate?.getMonth() ?? new Date().getMonth(),
+      year: checkInDate?.getFullYear() ?? new Date().getFullYear(),
+    },
+    { enabled: !!checkIn }
+  );
+  const { data: availabilityCheckOut } = trpc.fincas.availability.useQuery(
+    {
+      fincaId: finca.id,
+      month: checkOutDate?.getMonth() ?? new Date().getMonth(),
+      year: checkOutDate?.getFullYear() ?? new Date().getFullYear(),
+    },
+    { enabled: !!checkOut && checkOutDate?.getMonth() !== checkInDate?.getMonth() }
+  );
+
+  const blockedDates = new Set([
+    ...(availabilityCheckIn?.filter((a) => a.status !== "AVAILABLE").map((a) => new Date(a.date).toDateString()) || []),
+    ...(availabilityCheckOut?.filter((a) => a.status !== "AVAILABLE").map((a) => new Date(a.date).toDateString()) || []),
+  ]);
+
+  function hasBlockedDates(): boolean {
+    if (!checkIn || !checkOut || blockedDates.size === 0) return false;
+    const cur = new Date(checkIn);
+    const out = new Date(checkOut);
+    while (cur < out) {
+      if (blockedDates.has(cur.toDateString())) return true;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return false;
+  }
+
   function handleBook() {
     setError(null);
 
@@ -101,6 +138,10 @@ export function BookingCard({ finca }: BookingCardProps) {
     }
     if (adults + children > finca.capacity) {
       setError(`Esta finca tiene capacidad para ${finca.capacity} personas.`);
+      return;
+    }
+    if (hasBlockedDates()) {
+      setError("Algunas fechas seleccionadas no están disponibles. Por favor elige otras fechas.");
       return;
     }
     if (!session?.user?.id) {
