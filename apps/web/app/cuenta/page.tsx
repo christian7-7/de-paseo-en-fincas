@@ -5,6 +5,7 @@ import { auth } from "../../lib/auth";
 import { db } from "@repo/db";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from "@repo/ui";
 import { Calendar, Heart, Settings, LogOut, TreePine, Star } from "lucide-react";
+import { AddToCalendarButton, ConnectCalendarButton } from "./CalendarButton";
 
 async function getUserData(userId: string) {
   return db.user.findUnique({
@@ -152,10 +153,7 @@ export default async function CuentaPage() {
                       )}
                       {reservation.status === "CONFIRMED" && (
                         <div className="mt-3 pt-3 border-t flex gap-2">
-                          <Button variant="outline" size="sm" className="gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            Añadir al calendario
-                          </Button>
+                          <AddToCalendarButton reservationId={reservation.id} />
                         </div>
                       )}
                     </CardContent>
@@ -172,22 +170,7 @@ export default async function CuentaPage() {
             <CardTitle className="text-base">Conectar Google Calendar</CardTitle>
           </CardHeader>
           <CardContent>
-            {user.googleCalendarToken ? (
-              <div className="flex items-center gap-2 text-green-600">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-sm">Calendario conectado. Tus reservas se agregan automáticamente.</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Conecta tu Google Calendar para agregar tus reservas automáticamente.
-                </p>
-                <Button variant="outline" className="gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Conectar Google Calendar
-                </Button>
-              </div>
-            )}
+            <ConnectCalendarButton connected={!!user.googleCalendarToken} />
           </CardContent>
         </Card>
 
