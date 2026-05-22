@@ -27,6 +27,9 @@ export default function ReservarPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discountFormatted: string } | null>(null);
   const [couponError, setCouponError] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<"PSE" | "CARD" | "NEQUI">("PSE");
 
   const { data: reservation, isLoading } = trpc.reservations.byId.useQuery(
     { id: reservationId },
@@ -68,6 +71,29 @@ export default function ReservarPage() {
     }
     setErrors({});
     return true;
+  };
+
+  const handlePay = async () => {
+    setPaymentError(null);
+    setPaymentLoading(true);
+    try {
+      const res = await fetch("/api/payments/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reservationId, paymentMethod: selectedMethod }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPaymentError(data.error || "Error al iniciar el pago");
+        return;
+      }
+      // Redirect to Wompi checkout (or confirmation in dev mode)
+      window.location.href = data.checkoutUrl;
+    } catch {
+      setPaymentError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setPaymentLoading(false);
+    }
   };
 
   const handleApplyCoupon = async () => {
@@ -305,22 +331,41 @@ export default function ReservarPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-3">
-                    {[
-                      { icon: Building2, label: "PSE — Débito bancario", badge: "Recomendado" },
-                      { icon: CreditCard, label: "Tarjeta crédito / débito", badge: null },
-                      { icon: Smartphone, label: "Nequi", badge: null },
-                    ].map(({ icon: Icon, label, badge }) => (
+                    {(
+                      [
+                        { value: "PSE" as const, icon: Building2, label: "PSE — Débito bancario", badge: "Recomendado" },
+                        { value: "CARD" as const, icon: CreditCard, label: "Tarjeta crédito / débito", badge: null },
+                        { value: "NEQUI" as const, icon: Smartphone, label: "Nequi", badge: null },
+                      ] as const
+                    ).map(({ value, icon: Icon, label, badge }) => (
                       <button
-                        key={label}
-                        className="flex items-center gap-3 p-4 border border-border rounded-xl hover:border-[#E8832A] hover:bg-[#E8832A]/5 transition-colors text-left"
+                        key={value}
+                        onClick={() => setSelectedMethod(value)}
+                        className={`flex items-center gap-3 p-4 border rounded-xl transition-colors text-left ${
+                          selectedMethod === value
+                            ? "border-[#E8832A] bg-[#E8832A]/5"
+                            : "border-border hover:border-[#E8832A]/50"
+                        }`}
                       >
                         <Icon className="h-5 w-5 text-[#E8832A]" />
                         <span className="flex-1 text-sm font-medium">{label}</span>
                         {badge && <Badge variant="secondary" className="text-xs">{badge}</Badge>}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                          selectedMethod === value ? "border-[#E8832A]" : "border-muted-foreground/30"
+                        }`}>
+                          {selectedMethod === value && (
+                            <div className="h-2 w-2 rounded-full bg-[#E8832A]" />
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
+
+                  {paymentError && (
+                    <div className="flex items-center gap-2 bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
+                      {paymentError}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
                     <Shield className="h-4 w-4 text-green-500 shrink-0" />
@@ -335,8 +380,20 @@ export default function ReservarPage() {
                     <span className="text-[#E8832A]">{formatCOP(reservation.totalPrice)}</span>
                   </div>
 
-                  <Button className="w-full" size="lg">
-                    Pagar ahora
+                  <Button
+                    className="w-full bg-[#E8832A] hover:bg-[#d4721f] text-white"
+                    size="lg"
+                    onClick={handlePay}
+                    disabled={paymentLoading}
+                  >
+                    {paymentLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Procesando...
+                      </span>
+                    ) : (
+                      `Pagar ${formatCOP(reservation.totalPrice)}`
+                    )}
                   </Button>
 
                   <Button variant="ghost" className="w-full" onClick={() => setStep(2)}>
