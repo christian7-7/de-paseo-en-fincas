@@ -2,3 +2,4 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm turbo build --filter=web"
 }
+# DB connection uses port 5432 direct
