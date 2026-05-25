@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { db } from "@repo/db";
+import { scheduleReservationReminders } from "../../../../lib/scheduler";
 
 const WOMPI_EVENTS_SECRET = process.env.WOMPI_EVENTS_SECRET || "";
 
@@ -158,6 +159,11 @@ export async function POST(req: NextRequest) {
           metadata: { reservationId },
         },
       });
+
+      // Schedule 7 reminder jobs
+      scheduleReservationReminders(reservationId).catch((err) =>
+        console.error("[Wompi webhook] Error scheduling reminders:", err)
+      );
 
       console.log(`✅ Reservation ${reservationId} CONFIRMED — code ${checkInCode}`);
     } else if (status === "DECLINED") {

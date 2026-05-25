@@ -30,6 +30,7 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.28.0",
     "@repo/db": "workspace:*",
     "@repo/api": "workspace:*",
     "@repo/ui": "workspace:*",

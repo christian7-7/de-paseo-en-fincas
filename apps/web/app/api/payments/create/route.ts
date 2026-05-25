@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { z } from "zod";
 import { db } from "@repo/db";
 import { auth } from "../../../../lib/auth";
+import { scheduleReservationReminders } from "../../../../lib/scheduler";
 
 const WOMPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY || "";
 const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY || "";
@@ -173,6 +174,9 @@ export async function POST(req: NextRequest) {
       paidAt: new Date(),
     },
   });
+
+  // Schedule reminders for dev mode
+  scheduleReservationReminders(reservation.id).catch(console.error);
 
   return NextResponse.json({
     checkoutUrl: `${baseUrl}/reservar/${reservation.id}/confirmacion`,

@@ -241,6 +241,9 @@ importers:
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      bullmq:
+        specifier: ^5.28.0
+        version: 5.76.10
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
