@@ -1,0 +1,11 @@
+# Other apps in the monorepo (not deployed to this Vercel project)
+apps/dashboard
+apps/owner-portal
+
+# Services (deployed separately or not at all)
+services/
+
+# Dev artifacts
+**/.turbo
+**/node_modules
+**/.next/cache
