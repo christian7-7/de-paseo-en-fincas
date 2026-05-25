@@ -249,8 +249,8 @@ export default async function HomePage() {
                     department={finca.department}
                     capacity={finca.capacity}
                     bedrooms={finca.bedrooms}
-                    pricePerNight={finca.pricePerNight}
-                    weekendPrice={finca.weekendPrice}
+                    pricePerNight={Number(finca.pricePerNight)}
+                    weekendPrice={finca.weekendPrice ? Number(finca.weekendPrice) : null}
                     amenities={finca.amenities}
                     imageUrl={finca.images[0]?.url}
                     avgRating={avgRating}
