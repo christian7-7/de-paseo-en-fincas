@@ -78,13 +78,27 @@ const TESTIMONIALS = [
 ];
 
 export default async function HomePage() {
-  const [featuredFincas, municipalities] = await Promise.all([
-    getFeaturedFincas(),
-    getPopularMunicipalities(),
-  ]);
+  let featuredFincas: Awaited<ReturnType<typeof getFeaturedFincas>> = [];
+  let municipalities: Awaited<ReturnType<typeof getPopularMunicipalities>> = [];
+  let dbError: string | null = null;
+
+  try {
+    [featuredFincas, municipalities] = await Promise.all([
+      getFeaturedFincas(),
+      getPopularMunicipalities(),
+    ]);
+  } catch (err: unknown) {
+    dbError = err instanceof Error ? err.message : String(err);
+  }
 
   return (
     <main className="min-h-screen">
+      {/* Temporary debug error banner */}
+      {dbError && (
+        <div style={{ background: "red", color: "white", padding: "1rem", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+          DB ERROR: {dbError}
+        </div>
+      )}
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-md border-b border-border shadow-sm">
         <Link href="/" className="flex items-center gap-2">
