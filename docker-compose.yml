@@ -1,0 +1,70 @@
+services:
+  # ── PostgreSQL con pgvector ───────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: depaseo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: depaseoenfincas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d depaseoenfincas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Migraciones Prisma (se ejecuta una vez al inicio) ─────────────────────
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+    container_name: depaseo_migrate
+    command: >
+      sh -c "cd /app && node_modules/.bin/prisma migrate deploy --schema=packages/db/prisma/schema.prisma"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/depaseoenfincas
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ── App Next.js ───────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+        NEXT_PUBLIC_BRAND_COLOR_PRIMARY: ${NEXT_PUBLIC_BRAND_COLOR_PRIMARY:-E8832A}
+        NEXT_PUBLIC_BRAND_COLOR_DARK: ${NEXT_PUBLIC_BRAND_COLOR_DARK:-1A1D2E}
+    container_name: depaseo_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/depaseoenfincas
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET es requerido}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      NEXT_PUBLIC_BRAND_COLOR_PRIMARY: ${NEXT_PUBLIC_BRAND_COLOR_PRIMARY:-E8832A}
+      NEXT_PUBLIC_BRAND_COLOR_DARK: ${NEXT_PUBLIC_BRAND_COLOR_DARK:-1A1D2E}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pgdata:
+    name: depaseo_pgdata

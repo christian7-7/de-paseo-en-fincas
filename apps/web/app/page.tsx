@@ -2,51 +2,27 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Search, MapPin, Calendar, Users, Star, TreePine, Shield, Headphones } from "lucide-react";
 import { FincaCard, Skeleton, Button } from "@repo/ui";
+import { db } from "@repo/db";
 
 export const dynamic = "force-dynamic";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function supabaseGet(path: string) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": "application/json",
-    },
-    next: { revalidate: 0 },
-  });
-  if (!res.ok) throw new Error(`Supabase REST error: ${res.status}`);
-  return res.json();
-}
-
 async function getFeaturedFincas() {
-  const fincas = await supabaseGet(
-    `fincas?status=eq.ACTIVE&featured=eq.true&select=id,slug,name,municipality,department,capacity,bedrooms,price_per_night,weekend_price,amenities&limit=6`
-  );
-  // Fetch primary images for each finca
-  const fincaIds = fincas.map((f: Record<string, unknown>) => f.id);
-  const images = fincaIds.length > 0
-    ? await supabaseGet(`finca_images?finca_id=in.(${fincaIds.join(",")})&is_primary=eq.true&select=finca_id,url`)
-    : [];
-  const reviews = fincaIds.length > 0
-    ? await supabaseGet(`reviews?finca_id=in.(${fincaIds.join(",")})&select=finca_id,rating`)
-    : [];
-
-  return fincas.map((f: Record<string, unknown>) => ({
-    ...f,
-    pricePerNight: Number(f.price_per_night ?? 0),
-    weekendPrice: f.weekend_price ? Number(f.weekend_price) : null,
-    images: images.filter((img: Record<string, unknown>) => img.finca_id === f.id),
-    reviews: reviews.filter((r: Record<string, unknown>) => r.finca_id === f.id),
-  }));
+  return db.finca.findMany({
+    where: { status: "ACTIVE", featured: true },
+    include: {
+      images: { where: { isPrimary: true }, take: 1 },
+      reviews: { select: { rating: true } },
+    },
+    take: 6,
+  });
 }
 
 async function getPopularMunicipalities() {
-  return supabaseGet(
-    `municipalities?active=eq.true&order=name.asc&select=slug,name,department,hero_image&limit=8`
-  );
+  return db.municipality.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+    take: 8,
+  });
 }
 
 const STATS = [
@@ -218,15 +194,15 @@ export default async function HomePage() {
           <h2 className="text-2xl font-bold mb-2">Destinos populares</h2>
           <p className="text-muted-foreground mb-8">Los municipios que más eligen nuestros clientes</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {municipalities.slice(0, 8).map((m: Record<string, string>) => (
+            {municipalities.slice(0, 8).map((m) => (
               <Link
                 key={m.slug}
                 href={`/fincas?municipality=${encodeURIComponent(m.name)}`}
                 className="group relative overflow-hidden rounded-xl bg-muted h-24 flex items-end p-3 hover:shadow-md transition-shadow"
               >
-                {(m.heroImage || m.hero_image) && (
+                {m.heroImage && (
                   <img
-                    src={m.heroImage || m.hero_image}
+                    src={m.heroImage}
                     alt={m.name}
                     className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -265,30 +241,28 @@ export default async function HomePage() {
             }
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredFincas.map((finca: Record<string, unknown>) => {
-                const reviews = (finca.reviews as Array<{ rating: number }>) ?? [];
-                const images = (finca.images as Array<{ url: string }>) ?? [];
+              {featuredFincas.map((finca) => {
                 const avgRating =
-                  reviews.length > 0
-                    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+                  finca.reviews.length > 0
+                    ? finca.reviews.reduce((s, r) => s + r.rating, 0) / finca.reviews.length
                     : null;
                 return (
                   <FincaCard
-                    key={finca.id as string}
-                    id={finca.id as string}
-                    slug={finca.slug as string}
-                    name={finca.name as string}
-                    municipality={finca.municipality as string}
-                    department={finca.department as string}
-                    capacity={finca.capacity as number}
-                    bedrooms={finca.bedrooms as number}
-                    pricePerNight={finca.pricePerNight as number}
-                    weekendPrice={finca.weekendPrice as number | null}
-                    amenities={(finca.amenities as string[]) ?? []}
-                    imageUrl={images[0]?.url}
+                    key={finca.id}
+                    id={finca.id}
+                    slug={finca.slug}
+                    name={finca.name}
+                    municipality={finca.municipality}
+                    department={finca.department}
+                    capacity={finca.capacity}
+                    bedrooms={finca.bedrooms}
+                    pricePerNight={Number(finca.pricePerNight)}
+                    weekendPrice={finca.weekendPrice ? Number(finca.weekendPrice) : null}
+                    amenities={finca.amenities}
+                    imageUrl={finca.images[0]?.url}
                     avgRating={avgRating}
-                    reviewCount={reviews.length}
-                    featured={finca.featured as boolean}
+                    reviewCount={finca.reviews.length}
+                    featured={finca.featured}
                   />
                 );
               })}

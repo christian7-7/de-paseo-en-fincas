@@ -1,0 +1,26 @@
+# Control de versiones
+.git
+.gitignore
+
+# Dependencias (se instalan en el build)
+node_modules
+**/node_modules
+
+# Build artifacts
+**/.next
+**/dist
+**/.turbo
+
+# Entornos locales
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Otros
+.DS_Store
+*.md
+!README.md
